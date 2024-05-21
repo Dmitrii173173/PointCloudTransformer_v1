@@ -1,43 +1,36 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from module import Embedding, NeighborEmbedding, OA, TransformerSA
 
-from module import Embedding, NeighborEmbedding, OA, SA
+from naive_pct_cls import NaivePCT
 
 
-class NaivePCT(nn.Module):
-    def __init__(self):
-        super().__init__()
+class Embedding(nn.Module):
+    """
+    Input Embedding layer which consist of 2 stacked LBR layer.
+    """
 
-        self.embedding = Embedding(3, 128)
+    def __init__(self, in_channels=3, out_channels=128):
+        super(Embedding, self).__init__()
 
-        self.sa1 = SA(128)
-        self.sa2 = SA(128)
-        self.sa3 = SA(128)
-        self.sa4 = SA(128)
+        self.conv1 = nn.Conv1d(in_channels, out_channels, kernel_size=1, bias=False)
+        self.conv2 = nn.Conv1d(out_channels, out_channels, kernel_size=1, bias=False)
 
-        self.linear = nn.Sequential(
-            nn.Conv1d(512, 1024, kernel_size=1, bias=False),
-            nn.BatchNorm1d(1024),
-            nn.LeakyReLU(negative_slope=0.2)
-        )
+        self.bn1 = nn.BatchNorm1d(out_channels)
+        self.bn2 = nn.BatchNorm1d(out_channels)
     
     def forward(self, x):
-        x = self.embedding(x)
+        """
+        Input
+            x: [B, in_channels, N]
         
-        x1 = self.sa1(x)
-        x2 = self.sa2(x1)
-        x3 = self.sa3(x2)
-        x4 = self.sa4(x3)
-        x = torch.cat([x1, x2, x3, x4], dim=1)
-
-        x = self.linear(x)
-
-        # x = F.adaptive_max_pool1d(x, 1).view(batch_size, -1)
-        x_max = torch.max(x, dim=-1)[0]
-        x_mean = torch.mean(x, dim=-1)
-
-        return x, x_max, x_mean
+        Output
+            x: [B, out_channels, N]
+        """
+        x = F.relu(self.bn1(self.conv1(x)))
+        x = F.relu(self.bn2(self.conv2(x)))
+        return x
 
 
 class SPCT(nn.Module):
@@ -332,6 +325,93 @@ class PCTNormalEstimation(nn.Module):
         return x
 
 
+
+
+# Добавим автокодировщик на уровне входных данных
+class AutoEncoder(nn.Module):
+    def __init__(self, input_dim, hidden_dim):
+        super().__init__()
+        self.encoder = nn.Linear(input_dim, hidden_dim)
+        self.decoder = nn.Linear(hidden_dim, input_dim)
+    
+    def forward(self, x):
+        encoded = F.relu(self.encoder(x))
+        decoded = F.relu(self.decoder(encoded))
+        return decoded
+
+# Добавим механизм внимания на уровне позиции
+class PositionalAttention(nn.Module):
+    def __init__(self, input_dim, num_positions):
+        super().__init__()
+        self.query = nn.Linear(input_dim, input_dim)
+        self.key = nn.Linear(input_dim, input_dim)
+        self.value = nn.Linear(input_dim, input_dim)
+        self.num_positions = num_positions
+    
+    def forward(self, x):
+        B, N, _ = x.size()
+        positions = torch.arange(self.num_positions).unsqueeze(0).expand(B, -1).to(x.device)
+        query = self.query(x)
+        key = self.key(x)
+        value = self.value(x)
+        attention = torch.softmax(query @ key.transpose(-2, -1), dim=-1)
+        positional_attention = torch.softmax(positions.unsqueeze(1) @ positions.unsqueeze(2), dim=-1)
+        attended_value = attention @ value + positional_attention @ value
+        return attended_value
+
+# Добавим многоголовое внимание
+class MultiheadAttention(nn.Module):
+    def __init__(self, input_dim, num_heads):
+        super().__init__()
+        self.num_heads = num_heads
+        self.head_dim = input_dim // num_heads
+        self.query = nn.Linear(input_dim, input_dim)
+        self.key = nn.Linear(input_dim, input_dim)
+        self.value = nn.Linear(input_dim, input_dim)
+        self.out = nn.Linear(input_dim, input_dim)
+    
+    def forward(self, x):
+        B, N, _ = x.size()
+        query = self.query(x).view(B, N, self.num_heads, self.head_dim).transpose(1, 2)
+        key = self.key(x).view(B, N, self.num_heads, self.head_dim).transpose(1, 2)
+        value = self.value(x).view(B, N, self.num_heads, self.head_dim).transpose(1, 2)
+        attention = torch.softmax(query @ key.transpose(-2, -1) / self.head_dim ** 0.5, dim=-1)
+        attended_value = attention @ value
+        concatenated = attended_value.transpose(1, 2).reshape(B, N, -1)
+        return self.out(concatenated)
+
+# Добавим дополнительные слои и регуляризацию
+class TransformerImproved(nn.Module):
+    def __init__(self, input_dim, num_heads, num_layers):
+        super().__init__()
+        self.input_dim = input_dim
+        self.num_heads = num_heads
+        self.num_layers = num_layers
+
+        # Добавим несколько слоев трансформера
+        self.layers = nn.ModuleList([
+            nn.TransformerEncoderLayer(d_model=input_dim, nhead=num_heads)
+            for _ in range(num_layers)
+        ])
+
+        # Добавим регуляризацию
+        self.dropout = nn.Dropout(0.1)
+        self.layer_norm = nn.LayerNorm(input_dim)
+    
+    def forward(self, x):
+        # Применим несколько слоев трансформера
+        for layer in self.layers:
+            x = layer(x)
+        
+        # Применим регуляризацию
+        x = self.layer_norm(x)
+        x = self.dropout(x)
+        return x
+
+
+
+
+
 if __name__ == '__main__':
     pc = torch.rand(4, 3, 1024).to('cuda')
     cls_label = torch.rand(4, 16).to('cuda')
@@ -362,3 +442,17 @@ if __name__ == '__main__':
     print(naive_pct_ne(pc).size())
     print(spct_ne(pc).size())
     print(pct_ne(pc).size())
+
+
+    input_data = torch.randn(32, 100, 128)  # Пример входных данных
+    autoencoder = AutoEncoder(input_dim=128, hidden_dim=64)
+    positional_attention = PositionalAttention(input_dim=128, num_positions=100)
+    multihead_attention = MultiheadAttention(input_dim=128, num_heads=8)
+    transformer = TransformerImproved(input_dim=128, num_heads=8, num_layers=4)
+
+    # Применим добавленные компоненты к данным
+    encoded_data = autoencoder(input_data)
+    attended_data = positional_attention(input_data)
+    multiheaded_data = multihead_attention(input_data)
+    transformed_data = transformer(input_data)
+

@@ -1,0 +1,23 @@
+Train 244, loss: 1.373122, train acc: 0.977809, train avg acc: 0.966500
+test total time is 4.309814691543579
+Test 244, loss: 1.431763, test acc: 0.913290, test avg acc: 0.883541
+train total time is 45.53597116470337
+Train 245, loss: 1.374381, train acc: 0.978827, train avg acc: 0.967838
+test total time is 4.055509805679321
+Test 245, loss: 1.437865, test acc: 0.916532, test avg acc: 0.886622
+train total time is 45.524895668029785
+Train 246, loss: 1.376041, train acc: 0.976893, train avg acc: 0.964544
+test total time is 4.26687479019165
+Test 246, loss: 1.438652, test acc: 0.912075, test avg acc: 0.885750
+train total time is 45.50115084648132
+Train 247, loss: 1.375499, train acc: 0.976588, train avg acc: 0.966426
+test total time is 4.065184831619263
+Test 247, loss: 1.435368, test acc: 0.915721, test avg acc: 0.888041
+train total time is 45.51120567321777
+Train 248, loss: 1.373026, train acc: 0.978318, train avg acc: 0.968188
+test total time is 4.050692558288574
+Test 248, loss: 1.436053, test acc: 0.915721, test avg acc: 0.888081
+train total time is 45.54145407676697
+Train 249, loss: 1.374428, train acc: 0.976079, train avg acc: 0.963944
+test total time is 4.0445311069488525
+Test 249, loss: 1.432503, test acc: 0.915721, test avg acc: 0.886081
